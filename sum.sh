@@ -17,7 +17,7 @@ sum()
 	done < $1
 
 		echo "Sum of numbers: $sum"
-		return
+		return 0
 }
 
 # dispArgs()
@@ -44,6 +44,19 @@ add()
 
 # Beginning of script
 [ "$#" -lt  2 ] && echo "Invalid number of arguments" && exit -1
+for i in ${@:2}
+do
+	if [ -f "$i" ]; then
+		echo "$i is valid"
+	else
+		echo "file: $i is not valid"
+		exit -2
+	fi
+done
 
-# dispArgs $1 $2
 $1 ${@:2}
+
+if [ $? -ne 0 ]
+then
+	echo "$1 is not a recognized command"
+fi
