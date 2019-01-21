@@ -25,21 +25,38 @@ dims()
 
 	matXDim=0
 	matYDim=0
+	# read in the matrix file at $1 one line at a time, store each line in M1_LINE
 	while read M1_LINE
 	do
+		# update the Y-dimension counter
 		matYDim=$(expr $matYDim + 1)
+
+		# to determine the X-dimension, only one line needs to be counted
 		if [ $matYDim -eq 1 ]
 		then
-
 			for i in $M1_LINE
 			do
+				# update x-dimension counter for each number in M1_LINE
 				matXDim=$(expr $matXDim + 1)
 			done
 		fi
-
+	# redirect the first arg back into the while loop
 	done < $1
 
-		printf "%s %s\n" "$matXDim" "$matYDim"
+	# print results to stdout
+	printf "$matXDim $matYDim\n"
+	return 0
+}
+
+transpose()
+{
+	[ "$#" -ne 1 ] && return 2
+
+	cols=$( echo $(dims $1) | cut -d " " -f1 )
+
+	for ((i=1; i<=$cols; i++)); do
+		cut -d "	" -f "$i" $1 | paste -s
+	done
 }
 
 add()
@@ -59,27 +76,30 @@ add()
 
 # Beginning of script
 # Check that there is at least 2 arguments passed at the command line
-[ "$#" -lt  2 ] && echo "Invalid number of arguments for matrix script"
+[ "$#" -lt  2 ] && echo "Invalid number of arguments for matrix script" && exit 2
 
 # Check that the files are valid
 for i in ${@:2}
 do
 	if ! [ -f "$i" ]
 	then
-		echo "file: $i is not valid"
-		exit 1
+		echo "file: $i is not valid" >&2 && exit 1
 	fi
 done
+
+# global return variable
+_RET=0
 
 # call the function matching arg 1 and pass the rest of the args to the function
 $1 ${@:2}
 
-if [ -e .mat* ]
-then
-	rm .mat*
-fi
-# check the exit status of the last function
+# check return value of the last function
 if [ $? -eq 2 ]
 then
-	echo "Invalid number of arguments for $1 function"
+	echo "$$: Invalid number of arguments for $1 function" >&2 && exit 2
 fi
+
+# if [ -e .mat* ]
+# then
+# 	rm .mat*
+# fi
