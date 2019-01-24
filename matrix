@@ -1,105 +1,168 @@
 #!/bin/bash
 
-sum()
-{
-	SUM=0
-	while read myLine
-	do
-		echo $myLine
-
-		for i in $myLine
-		do
-			echo "i: $i"
-				sum=$(expr $sum + $i)
-		done
-
-	done < $1
-
-		echo "Sum of numbers: $sum"
-		return 0
-}
-
 dims()
 {
-	[ "$#" -ne 1 ] && return 2
+	if [ "$#" -eq 0 ] || [ "$#" -gt 1 ] && [ "$1" ]; then
+		_RET=2; return 2
+	fi
 
-	matXDim=0
-	matYDim=0
-	# read in the matrix file at $1 one line at a time, store each line in M1_LINE
-	while read M1_LINE
-	do
-		# update the Y-dimension counter
-		matYDim=$(expr $matYDim + 1)
+	M=".dimsTmp$$"
+	cat $1 > $M
 
-		# to determine the X-dimension, only one line needs to be counted
-		if [ $matYDim -eq 1 ]
-		then
-			for i in $M1_LINE
-			do
-				# update x-dimension counter for each number in M1_LINE
-				matXDim=$(expr $matXDim + 1)
-			done
-		fi
-	# redirect the first arg back into the while loop
-	done < $1
+	WORDS=$(wc -w $M | cut -d " " -f 1)
+	LINES=$(wc -l $M | cut -d " " -f 1)
+	COLS=$(( $WORDS / $LINES ))
 
-	# print results to stdout
-	printf "$matXDim $matYDim\n"
+	echo "$LINES $COLS"
+	rm .dims*
+
+	_RET=0
 	return 0
+
 }
 
 transpose()
 {
-	[ "$#" -ne 1 ] && return 2
+	if [ "$#" -eq 0 ] || [ "$#" -gt 1 ] && [ "$1" ]; then
+		_RET=2; return 2
+	fi
 
-	cols=$( echo $(dims $1) | cut -d " " -f1 )
+	M=".transTmp$$"
+	cat $1 > $M
 
-	for ((i=1; i<=$cols; i++)); do
-		cut -d "	" -f "$i" $1 | paste -s
+	COLS=$( dims $M | cut -d " " -f 2 )
+
+
+	for ((i=1; i<=$COLS; i++)); do
+		cut -d "	" -f "$i" $M | paste -s
 	done
+
+	rm .trans*
+
+	_RET=0
+	return 0
+}
+
+mean()
+{
+	if [ "$#" -eq 0 ] || [ "$#" -gt 1 ] && [ "$1" ]; then
+		_RET=2; return 2
+	fi
+
+	M=".meanTmp$$"
+	cat $1 > $M
+	COLS=$( dims $M | cut -d " " -f 2 )
+	LINES=$(wc -l $M | cut -d " " -f 1)
+
+	for ((i=1; i<=$COLS; i++)); do
+		col=$(cut -f "$i" $M)
+		sum=0
+
+		for j in $col; do
+			sum=$(( $sum + $j ))
+		done
+
+		# echo $sum
+
+		mean=$(( ( $sum + ($LINES/2) ) * ( (($sum>0) * 2)-1 ) / $LINES ))
+		printf "$mean\t"
+	done
+
+	printf "\n"
+	rm .mean*
 }
 
 add()
 {
-	[ "$#" -ne  2 ] && return 2
+	[ "$#" -ne  2 ] && _RET=2 && return 2
 
-	M1=0
-	while read M1_LINE
-	do
-		echo $M1_LINE
-		M1=${ $M1 + $M1_LINE }
-	done < $1
+	M1_DIMS=$( dims $1 )
+	M2_DIMS=$( dims $2 )
 
-	echo "M1: $M1"
+	if [ "$M1_DIMS" = "$M2_DIMS" ]; then
+		M1=".add1$$"
+		M2=".add2$$"
+		COLS=$( echo "$M1_DIMS" | cut -d " " -f 2 )
+		LINES=$(wc -l $1 | cut -d " " -f 1)
+		cat $1 > $M1
+		cat $2 > $M2
 
+		# for ((i=0; i<$LINES; i++)); do
+		# 	for ((j=0; j<$COLS; j++)); do
+		# 		local result=0
+    #         for ((k=1; k<=$COLS; k++)); do
+		#
+    #         done
+		# 		done
+		# 	done
+				# https://which-dwarf-are-you.blogspot.com/2015/06/bash-matrix-multiplication.html
+
+	rm .add*
+	else
+		_RET=3; return 3
+	fi
+}
+
+multiply()
+{
+	[ "$#" -ne  2 ] && _RET=2 && return 2
+
+	M1_DIMS=$( dims $1 )
+	M2_DIMS=$( dims $2 )
+	local M=$1
+	local N=$2
+
+	if [ "$M1_DIMS" = "$M2_DIMS" ]; then
+		M1=".mult1$$"
+		M2=".mult2$$"
+		COLS=$( echo "$M1_DIMS" | cut -d " " -f 2 )
+		LINES=$(wc -l $1 | cut -d " " -f 1)
+		cat $1 > $M1
+		cat $2 > $M2
+
+		# for ((i=0; i<$LINES; i++)); do
+		# 	for ((j=0; j<$COLS; j++)); do
+		# 		local result=0
+    #         for ((k=1; k<=$COLS; k++)); do
+		#
+    #         done
+		# 		done
+		# 	done
+				# https://which-dwarf-are-you.blogspot.com/2015/06/bash-matrix-multiplication.html
+
+		rm .mult*
+	else
+		_RET=3; return 3
+	fi
 }
 
 # Beginning of script
 # Check that there is at least 2 arguments passed at the command line
-[ "$#" -lt  2 ] && echo "Invalid number of arguments for matrix script" && exit 2
+[ "$#" -lt  2 ] && ! [ "$0" ] && echo "Invalid number of arguments for matrix script" >&2 && exit 2
 
 # Check that the files are valid
 for i in ${@:2}
 do
-	if ! [ -f "$i" ]
+	if ! [ -f "$i" ] || ! [ -r "$i" ]
 	then
-		echo "file: $i is not valid" >&2 && exit 1
+		echo "file $i is not valid" >&2 && exit 1
 	fi
 done
 
-# global return variable
-_RET=0
+# Return variable
+declare -i _RET
 
 # call the function matching arg 1 and pass the rest of the args to the function
 $1 ${@:2}
 
-# check return value of the last function
-if [ $? -eq 2 ]
-then
-	echo "$$: Invalid number of arguments for $1 function" >&2 && exit 2
+# check return value of the last
+err=$(echo $?)
+if [ $err -ne 0 ]; then
+	if [ $err -eq 2 ]; then
+		echo "$$: Invalid number of arguments for $1 function" >&2 && exit 2
+	elif [ $err -eq 3 ]; then
+		echo "$$: The two matrices are not equal" >&2 && exit 3
+	elif [ $err -eq 127 ]; then
+		echo "$$: Bad command" >&2 && exit 4
+	fi
 fi
-
-# if [ -e .mat* ]
-# then
-# 	rm .mat*
-# fi
