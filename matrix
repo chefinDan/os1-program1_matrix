@@ -62,10 +62,13 @@ mean()
 			sum=$(( $sum + $j ))
 		done
 
-		# echo $sum
-
-		mean=$(( ( $sum + ($LINES/2) ) * ( (($sum>0) * 2)-1 ) / $LINES ))
-		printf "$mean\t"
+		if [ $i -eq $COLS ]; then
+			mean=$(( ( $sum + ($LINES/2)*( ($sum>0)*2-1 ) ) / $LINES ))
+			printf "%d" $mean
+		else
+			mean=$(( ( $sum + ($LINES/2)*( ($sum>0)*2-1 ) ) / $LINES ))
+			printf "%d\t" $mean
+		fi
 	done
 
 	printf "\n"
@@ -74,7 +77,9 @@ mean()
 
 add()
 {
-	[ "$#" -ne  2 ] && _RET=2 && return 2
+	if [ "$#" -lt 2 ] || [ "$#" -gt 2 ] && [ "$1" ]; then
+		_RET=2; return 2
+	fi
 
 	M1_DIMS=$( dims $1 )
 	M2_DIMS=$( dims $2 )
@@ -86,16 +91,6 @@ add()
 		LINES=$(wc -l $1 | cut -d " " -f 1)
 		cat $1 > $M1
 		cat $2 > $M2
-
-		# for ((i=0; i<$LINES; i++)); do
-		# 	for ((j=0; j<$COLS; j++)); do
-		# 		local result=0
-    #         for ((k=1; k<=$COLS; k++)); do
-		#
-    #         done
-		# 		done
-		# 	done
-				# https://which-dwarf-are-you.blogspot.com/2015/06/bash-matrix-multiplication.html
 
 	rm .add*
 	else
