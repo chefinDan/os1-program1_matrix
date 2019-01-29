@@ -2,17 +2,24 @@
 
 dims()
 {
-	if [ "$#" -eq 0 ] || [ "$#" -gt 1 ] && [ "$1" ]; then
+	# Check for correct numbers of args, expected: 1
+	if [ "$#" -gt 1 ]; then
 		_RET=2; return 2
 	fi
 
+	# assign M to the path of a temp file and cat positional parameter 1
+	# into temp file
 	M=".dimsTmp$$"
 	cat $1 > $M
 
+	# pipe wc -w into cut and get the first field
 	WORDS=$(wc -w $M | cut -d " " -f 1)
+	# pipe wc -l into cut and get the first field
 	LINES=$(wc -l $M | cut -d " " -f 1)
+	# the number of columns is the totals "words"/lines
 	COLS=$(( $WORDS / $LINES ))
 
+	# send formatted result to stdout
 	echo "$LINES $COLS"
 	rm .dims*
 
@@ -23,16 +30,19 @@ dims()
 
 transpose()
 {
-	if [ "$#" -eq 0 ] || [ "$#" -gt 1 ] && [ "$1" ]; then
+	# Check for correct numbers of args, expected: 1
+	if [ "$#" -gt 1 ]; then
 		_RET=2; return 2
 	fi
 
+	# assign M to the path of a temp file and redirect cat's stdout into temp file
 	M=".transTmp$$"
 	cat $1 > $M
 
+	# The cols in M is the second field returned by the dims func.
 	COLS=$( dims $M | cut -d " " -f 2 )
 
-
+	# cut each column from M and paste in serial to stdout
 	for ((i=1; i<=$COLS; i++)); do
 		cut -d "	" -f "$i" $M | paste -s
 	done
@@ -45,15 +55,18 @@ transpose()
 
 mean()
 {
-	if [ "$#" -eq 0 ] || [ "$#" -gt 1 ] && [ "$1" ]; then
+	# Check for correct numbers of args, expected: 1
+	if [ "$#" -gt 1 ]; then
 		_RET=2; return 2
 	fi
 
+	# assign M to the path of a temp file and redirect cat's stdout into temp file
 	M=".meanTmp$$"
 	cat $1 > $M
 	COLS=$( dims $M | cut -d " " -f 2 )
 	LINES=$(wc -l $M | cut -d " " -f 1)
 
+	# for each column in M iterate through the numbers and sum them
 	for ((i=1; i<=$COLS; i++)); do
 		col=$(cut -f "$i" $M)
 		sum=0
@@ -62,6 +75,8 @@ mean()
 			sum=$(( $sum + $j ))
 		done
 
+		# print the mean of each column, putting a tab char after each mean except
+		# for the last one.
 		if [ $i -eq $COLS ]; then
 			mean=$(( ( $sum + ($LINES/2)*( ($sum>0)*2-1 ) ) / $LINES ))
 			printf "%d" $mean
@@ -81,25 +96,32 @@ add()
 		_RET=2; return 2
 	fi
 
+	# use dims function to get dimensions of each matrix file
 	M1_DIMS=$( dims $1 )
 	M2_DIMS=$( dims $2 )
 
+	# Only proceed if the dimensions match
 	if [ "$M1_DIMS" = "$M2_DIMS" ]; then
+		# get number of cols
 		COLS=$( echo $M1_DIMS | cut -d " " -f 2 )
 
+		# redirect the files in pos. params. 1 and 2 to fd's 3 and 4.
+		# Read in from both fd's and save the line in array var currLine{1,2}
 		while read -a currLine1 <&3 && read -a currLine2 <&4; do
 
+			# sum the corresponding arrays, cell by cell, and send to stdout
 			for ((i=0; i<$(( $COLS -1 )); i++)); do
 				printf "%d\t" "$(( ${currLine1[i]} + ${currLine2[i]} ))"
 			done
 				printf "%d\n" "$(( ${currLine1[i]} + ${currLine2[i]} ))"
 
-		done 3<"$1" 4<"$2"
+		done 3<"$1" 4<"$2" # feed the while loop with fd's 3 and 4
 
 	else
 		_RET=3; return 3
 	fi
 }
+
 
 multiply()
 {
@@ -107,10 +129,12 @@ multiply()
 		_RET=2; return 2
 	fi
 
-	M1=( )
-	M2=( )
-	M3=( )
+	# declare 3 arrays to hold data from input matrices and the resultant product matrix
+	declare -a M1
+	declare -a M2
+	declare -a M3
 
+	# get and store the dimensions of both input matrices
 	M1_DIMS=$( dims $1 )
 	M1_COLS=$( echo $M1_DIMS | cut -d " " -f 2 )
 	M1_ROWS=$( echo $M1_DIMS | cut -d " " -f 1 )
@@ -119,31 +143,32 @@ multiply()
 	M2_ROWS=$( echo $M2_DIMS | cut -d " " -f 1 )
 	M2_COLS=$( echo $M2_DIMS | cut -d " " -f 2 )
 
+	# store the dimensions of the resultant product matrix
 	M3_ROWS="$M1_ROWS"
 	M3_COLS="$M2_COLS"
 
+	# proceed if the matrices can be legally multiplied
 	if [ "$M1_COLS" = "$M2_ROWS" ]; then
-		IDX=0
-		while read LINE; do
-			for ((i=0; i<$M1_COLS; i++)); do
-				field=$(( $i % $M1_COLS + 1 ))
-				M1[$IDX]=$( echo "$LINE" | cut -f$field )
-				IDX=$(( $IDX + 1 ))
+
+		# store each matrix in an array, number by number
+		while read ROW; do
+			for NUM in $ROW; do
+				M1+=($NUM)
 			done
 		done <$1
 
-		IDX=0
-		while read LINE; do
-			for ((i=0; i<$M2_COLS; i++)); do
-				field=$(( $i % $M2_COLS + 1 ))
-				M2[$IDX]=$( echo "$LINE" | cut -f$field )
-				IDX=$(( $IDX + 1 ))
+		while read ROW; do
+			for NUM in $ROW; do
+				M2+=($NUM)
 			done
 		done <$2
 
+
+		# iterate through the rows and columns the product matrix, then iterate
+		# through each number in the first matrix row
 		for ((i=1; i<=$M3_ROWS; i++)); do
 			for ((j=1; j<=$M3_COLS; j++)); do
-				runningtotal=0
+				total=0
 				for ((k=1; k<=$M1_COLS; k++)); do
 	    		ROWa="$i"
 	    		COLa="$k"
@@ -152,27 +177,35 @@ multiply()
 	    		COLb="$j"
 	    		indexb=$(((ROWb-1)*M2_COLS+COLb-1))
 
-	    		entry_from_1=${M1[$indexa]}
-	    		entry_from_2=${M2[$indexb]}
+					# get the number from M1 and M2
+	    		num_from_M1=${M1[$indexa]}
+	    		num_from_M2=${M2[$indexb]}
 
-	    		subtotal=$((entry_from_1*entry_from_2))
-	    		((runningtotal+=subtotal))
+					# calculate subtotal by multiplying the number from M1 and M2
+	    		subtotal=$((num_from_M1*num_from_M2))
+					# update total amount
+	    		total=$(( total + subtotal ))
 				done
-				number="$runningtotal"
-				index=$(((i-1)*M3_COLS+j))
-				M3[$index]="$number"
+				# at this point the calculations for a number in the product matrix is complete.
+				number="$total"
+				idx=$(((i-1)*M3_COLS+j))
+				M3[$idx]="$number"
     	done
 		done
 
+		# print M3, the product matrix
 		IDX=1
-		for ((i=0; i<M3_ROWS; i++ )); do
-			for ((j=0; j<M3_COLS-1; j++)); do
-				printf "%s\t" "${M3[$IDX]}"
-				IDX=$(( $IDX + 1 ))
-			done
-			printf "%s\n" "${M3[$IDX]}"
-			IDX=$(( $IDX + 1 ))
+		for NUM in ${M3[@]}; do
+			if [ $(( $IDX % $M3_COLS  )) -eq 0 ]; then
+				printf "%s\n" "$NUM"
+			elif [ $NUM -eq $M3_COLS ]; then
+				printf "%s" "$NUM"
+			else
+				printf "%s\t" "$NUM"
+			fi
+			IDX=$(($IDX+1))
 		done
+
 	else
 		_RET=3; return 3
 	fi
